@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     techDescription: { fontSize: 12, color: '#ADB5BD', marginTop: 2 },
     infoPanel: {
         position: 'absolute',
-        bottom: -MAX_PANEL_HEIGHT + MIN_PANEL_HEIGHT,
+        bottom: -MAX_PANEL_HEIGHT + MIN_PANEL_HEIGHT + 20,
         width: '100%',
         height: MAX_PANEL_HEIGHT,
         backgroundColor: '#212529',

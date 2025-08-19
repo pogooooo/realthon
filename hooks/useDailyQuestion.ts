@@ -1,95 +1,101 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// 일일 질문 배열
 const dailyQuestions = [
-    "오늘 당신은 어땠나요?",
-    "조금 더 나은 나를 위해 한 일이 있나요?",
-    "오늘 하루 가장 감사했던 순간은 언제였나요?",
-    "최근 당신을 웃게 만든 것은 무엇인가요?",
-    "내일의 나에게 어떤 응원의 말을 해주고 싶나요?",
+    { key: 'q1', text: "오늘 당신이 한 일은 무엇인가요?", type: 'text' },
+    { key: 'q2', text: "오늘 자신을 평가하면 어떤가요?", type: 'evaluation' },
+    { key: 'q3', text: "오늘 자신보다 나아질 방법은 무엇인가요?", type: 'text' },
 ];
 
+// 'YYYY-MM-DD' 형식의 날짜 문자열 반환
 const getISODateString = (date: Date): string => {
-    return date.toISOString().split('T')[0]; // 'YYYY-MM-DD' 형식
+    return date.toISOString().split('T')[0];
 };
 
+// AsyncStorage 키 생성
 const getStorageKey = (date: Date): string => {
     return `@dailyAnswer:${getISODateString(date)}`;
 };
 
-// 날짜를 기반으로 그날의 질문을 반환하는 헬퍼 함수
-export const getDailyQuestionForDate = (date: Date): string => {
-    const startOfYear = new Date(date.getFullYear(), 0, 0);
-    const diff = date.getTime() - startOfYear.getTime();
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    return dailyQuestions[dayOfYear % dailyQuestions.length];
-};
-
-// 모든 답변 기록을 불러오는 함수
-export const loadAllAnswers = async (): Promise<Record<string, string>> => {
-    try {
-        const keys = await AsyncStorage.getAllKeys();
-        const answerKeys = keys.filter(key => key.startsWith('@dailyAnswer:'));
-        if (answerKeys.length === 0) return {};
-
-        const dataPairs = await AsyncStorage.multiGet(answerKeys);
-        const answers: Record<string, string> = {};
-        dataPairs.forEach(([key, value]) => {
-            if (key && value) {
-                // 키에서 날짜 부분만 추출 ('@dailyAnswer:YYYY-MM-DD' -> 'YYYY-MM-DD')
-                const dateString = key.substring(13);
-                answers[dateString] = value;
-            }
-        });
-        return answers;
-    } catch (e) {
-        console.error("Failed to load all answers.", e);
-        return {};
-    }
-};
-
+// 저장할 답변 데이터 타입
+interface DailyAnswer {
+    q1: string;
+    q2: 0 | 1 | null;
+    q3: string;
+}
 
 export const useDailyQuestion = () => {
-    const [dailyQuestion, setDailyQuestion] = useState<string>('');
-    const [answer, setAnswer] = useState<string>('');
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [answers, setAnswers] = useState<DailyAnswer | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    useEffect(() => {
-        const loadCurrentData = async () => {
-            setIsLoading(true);
-            const today = new Date();
-            setDailyQuestion(getDailyQuestionForDate(today));
-
-            try {
-                const storageKey = getStorageKey(today);
-                const savedAnswer = await AsyncStorage.getItem(storageKey);
-                setAnswer(savedAnswer || '');
-            } catch (e) {
-                console.error("Failed to load daily answer.", e);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadCurrentData();
-    }, []);
-
-    const handleSaveAnswer = useCallback(async (text: string) => {
-        setAnswer(text);
+    // 선택된 날짜에 대한 답변을 불러오는 함수
+    const loadAnswer = useCallback(async (date: Date) => {
+        setIsLoading(true);
         try {
-            const today = new Date();
-            const storageKey = getStorageKey(today);
-            await AsyncStorage.setItem(storageKey, text);
+            const storageKey = getStorageKey(date);
+            const savedData = await AsyncStorage.getItem(storageKey);
+            if (savedData) {
+                setAnswers(JSON.parse(savedData));
+                console.log("Loaded answers for", getISODateString(date), ":", JSON.parse(savedData));
+            } else {
+                setAnswers({ q1: '', q2: null, q3: '' });
+                console.log("No saved answers found for", getISODateString(date), ". Initializing with empty values.");
+            }
         } catch (e) {
-            console.error("Failed to save daily answer.", e);
+            console.error("Failed to load daily answers.", e);
+        } finally {
+            setIsLoading(false);
         }
     }, []);
 
+    // 날짜 변경 시 답변 로드
+    useEffect(() => {
+        loadAnswer(selectedDate);
+    }, [selectedDate, loadAnswer]);
+
+    // ✅ 모든 답변을 한 번에 저장하는 함수 추가
+    const handleSaveAllAnswers = useCallback(async (newAnswers: DailyAnswer) => {
+        try {
+            const storageKey = getStorageKey(selectedDate);
+            await AsyncStorage.setItem(storageKey, JSON.stringify(newAnswers));
+            setAnswers(newAnswers); // 훅의 상태를 직접 업데이트
+            console.log("Successfully saved all answers:", newAnswers);
+        } catch (e) {
+            console.error("Failed to save daily answers.", e);
+        }
+    }, [selectedDate]);
+
+    // 답변 삭제
+    const handleDeleteAnswer = useCallback(async () => {
+        try {
+            const storageKey = getStorageKey(selectedDate);
+            await AsyncStorage.removeItem(storageKey);
+            setAnswers({ q1: '', q2: null, q3: '' });
+        } catch (e) {
+            console.error("Failed to delete daily answer.", e);
+        }
+    }, [selectedDate]);
+
     return {
-        dailyQuestion,
-        answer,
-        handleSaveAnswer,
+        dailyQuestions,
+        answers,
         isLoading,
+        selectedDate,
+        setSelectedDate,
+        handleSaveAllAnswers,
+        handleDeleteAnswer,
     };
+};
+
+// 모든 답변 기록을 불러오는 함수 (캘린더 뷰에서 사용)
+export const loadAllAnswers = async (): Promise<string[]> => {
+    try {
+        const keys = await AsyncStorage.getAllKeys();
+        return keys.filter(key => key.startsWith('@dailyAnswer:')).map(key => key.substring(13));
+    } catch (e) {
+        console.error("Failed to load all answer dates.", e);
+        return [];
+    }
 };

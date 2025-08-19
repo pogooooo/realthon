@@ -27,12 +27,10 @@ import Animated, {
     Extrapolate,
 } from 'react-native-reanimated';
 import CustomModal from '../../components/ui/CustomModal';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// ✅ useDailyRecords 훅을 사용합니다.
+import { useDailyRecords, DailyAnswer, Event, Events } from '../../hooks/useDailyRecords';
 
 // --- Types ---
-type Event = { id: number; title: string; memo: string };
-type Events = { [key: string]: Event[] };
-type DailyAnswers = { [key: string]: string };
 type GestureContext = { startY: number };
 
 // --- Constants & Helpers ---
@@ -44,58 +42,31 @@ const SNAP_TOP = -(MAX_PANEL_HEIGHT - MIN_PANEL_HEIGHT);
 const SNAP_BOTTOM = 0;
 const today = new Date();
 
+// ✅ useDailyQuestion.ts와 동일한 질문 배열 정의
 const dailyQuestions = [
-    "오늘 당신은 어땠나요?", "조금 더 나은 나를 위해 한 일이 있나요?", "오늘 하루 가장 감사했던 순간은 언제였나요?",
-    "최근 당신을 웃게 만든 것은 무엇인가요?", "내일의 나에게 어떤 응원의 말을 해주고 싶나요?",
+    { key: 'q1', text: "오늘 당신이 한 일은 무엇인가요?", type: 'text' },
+    { key: 'q2', text: "오늘 자신을 평가하면 어떤가요?", type: 'evaluation' },
+    { key: 'q3', text: "오늘 자신보다 나아질 방법은 무엇인가요?", type: 'text' },
 ];
 
-const getISODateString = (date: Date): string => date.toISOString().split('T')[0];
-
-const getQuestionForDate = (date: Date): string => {
-    const startOfYear = new Date(date.getFullYear(), 0, 0);
-    const diff = date.getTime() - startOfYear.getTime();
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    return dailyQuestions[dayOfYear % dailyQuestions.length];
+// --- 날짜 포맷 함수 수정 ---
+const getISODateString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 export default function Calendar() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
     const [modalVisible, setModalVisible] = useState(false);
-    const [events, setEvents] = useState<Events>({});
-    const [dailyAnswers, setDailyAnswers] = useState<DailyAnswers>({}); // ✅ 일일 답변 상태
     const [currentEvent, setCurrentEvent] = useState<Partial<Event>>({ title: '', memo: '' });
 
+    // ✅ useDailyRecords 훅에서 데이터와 함수를 가져옵니다.
+    const { dailyAnswers, events, saveEvent, deleteEvent } = useDailyRecords();
+
     const translateY = useSharedValue(SNAP_BOTTOM);
-
-    // ✅ 앱 시작 시 모든 이벤트와 답변을 불러옵니다.
-    useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                const allKeys = await AsyncStorage.getAllKeys();
-                const allData = await AsyncStorage.multiGet(allKeys);
-
-                const loadedEvents: Events = {};
-                const loadedAnswers: DailyAnswers = {};
-
-                allData.forEach(([key, value]) => {
-                    if (value) {
-                        if (key.startsWith('@event:')) {
-                            loadedEvents[key.replace('@event:', '')] = JSON.parse(value);
-                        } else if (key.startsWith('@dailyAnswer:')) {
-                            loadedAnswers[key.replace('@dailyAnswer:', '')] = value;
-                        }
-                    }
-                });
-                setEvents(loadedEvents);
-                setDailyAnswers(loadedAnswers);
-            } catch (e) {
-                console.error("Failed to load initial data.", e);
-            }
-        };
-        loadInitialData();
-    }, []);
 
     const handleDatePress = useCallback((day: number) => {
         const newSelectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
@@ -122,46 +93,15 @@ export default function Calendar() {
             Alert.alert("알림", "제목을 입력해주세요.");
             return;
         }
-        const key = getISODateString(selectedDate);
-        const storageKey = `@event:${key}`;
-
-        const dayEvents = events[key] || [];
-        let updatedDayEvents;
-
-        if (currentEvent.id) {
-            updatedDayEvents = dayEvents.map(event =>
-                event.id === currentEvent.id ? { ...event, ...currentEvent } as Event : event
-            );
-        } else {
-            const newEvent = { ...currentEvent, id: Date.now() } as Event;
-            updatedDayEvents = [...dayEvents, newEvent];
-        }
-
-        const newEvents = { ...events, [key]: updatedDayEvents };
-        setEvents(newEvents);
-        await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDayEvents));
+        await saveEvent(selectedDate, currentEvent as Event);
         setModalVisible(false);
-    }, [currentEvent, selectedDate, events]);
+    }, [currentEvent, selectedDate, saveEvent]);
 
     const handleDeleteEvent = useCallback(async () => {
         if (!selectedDate || !currentEvent.id) return;
-        const key = getISODateString(selectedDate);
-        const storageKey = `@event:${key}`;
-
-        const dayEvents = events[key] || [];
-        const updatedDayEvents = dayEvents.filter(event => event.id !== currentEvent.id);
-        const newEvents = { ...events };
-
-        if (updatedDayEvents.length > 0) {
-            newEvents[key] = updatedDayEvents;
-            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDayEvents));
-        } else {
-            delete newEvents[key];
-            await AsyncStorage.removeItem(storageKey);
-        }
-        setEvents(newEvents);
+        await deleteEvent(selectedDate, currentEvent.id);
         setModalVisible(false);
-    }, [currentEvent.id, selectedDate, events]);
+    }, [currentEvent.id, selectedDate, deleteEvent]);
 
     const deselectDate = useCallback(() => {
         setSelectedDate(null);
@@ -235,7 +175,6 @@ export default function Calendar() {
     const selectedKey = selectedDate ? getISODateString(selectedDate) : '';
     const selectedDayEvents = events[selectedKey] || [];
     const selectedDayAnswer = dailyAnswers[selectedKey];
-    const selectedDayQuestion = selectedDate ? getQuestionForDate(selectedDate) : '';
     const dayOfWeek = selectedDate ? ['일', '월', '화', '수', '목', '금', '토'][selectedDate.getDay()] : '';
 
     return (
@@ -259,14 +198,28 @@ export default function Calendar() {
                             <TouchableOpacity onPress={handleOpenModalForNew} disabled={!selectedDate}><Feather name="plus-circle" size={24} color={selectedDate ? "#A178DF" : "#495057"} /></TouchableOpacity>
                         </View>
                         <Animated.ScrollView style={[styles.eventList, contentOpacityStyle]}>
+                            {/* ✅ 일일 질문 및 답변을 렌더링 */}
                             {selectedDayAnswer && (
                                 <View style={styles.answerContainer}>
                                     <View style={styles.answerHeader}>
                                         <Feather name="help-circle" size={18} color="#A19ECA" />
-                                        <Text style={styles.answerTitle}>그날의 질문</Text>
+                                        <Text style={styles.answerTitle}>오늘의 기록</Text>
                                     </View>
-                                    <Text style={styles.answerQuestionText}>{selectedDayQuestion}</Text>
-                                    <Text style={styles.answerText}>{selectedDayAnswer}</Text>
+                                    {dailyQuestions.map((q, index) => {
+                                        let answerText = '';
+                                        if (q.key === 'q1' && selectedDayAnswer.q1) answerText = selectedDayAnswer.q1;
+                                        if (q.key === 'q2' && selectedDayAnswer.q2 !== null) answerText = selectedDayAnswer.q2 === 1 ? '긍정적' : '부정적';
+                                        if (q.key === 'q3' && selectedDayAnswer.q3) answerText = selectedDayAnswer.q3;
+
+                                        return (
+                                            answerText ? (
+                                                <View key={index} style={styles.answerItem}>
+                                                    <Text style={styles.answerQuestionText}>{q.text}</Text>
+                                                    <Text style={styles.answerText}>{answerText}</Text>
+                                                </View>
+                                            ) : null
+                                        );
+                                    })}
                                 </View>
                             )}
                             {selectedDayEvents.length > 0 ? (
@@ -335,6 +288,8 @@ const styles = StyleSheet.create({
     answerContainer: { backgroundColor: '#181A1E', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#343A40' },
     answerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
     answerTitle: { fontSize: 14, fontWeight: '500', color: '#ADB5BD', marginLeft: 8 },
+    // ✅ 답변 아이템 스타일 추가
+    answerItem: { marginBottom: 15, },
     answerQuestionText: { fontSize: 16, fontWeight: '600', color: '#F8F9FA', marginBottom: 8, lineHeight: 22 },
     answerText: { fontSize: 15, color: '#CED4DA', lineHeight: 22 },
     eventItem: { backgroundColor: '#181A1E', padding: 15, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#343A40' },

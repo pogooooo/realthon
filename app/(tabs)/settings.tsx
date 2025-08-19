@@ -8,12 +8,18 @@ import {
     TouchableOpacity,
     Platform,
     StatusBar,
-    Image
+    Image,
+    Button
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import {useAuth} from "@/hooks/useAuth";
+import { useRouter } from 'expo-router';
 
 // --- Main Component ---
 export default function SettingsScreen() {
+
+    const { user, logout } = useAuth();
+    const router = useRouter();
 
     // Helper component for each setting item
     const SettingItem = ({ icon, text, onPress, isDestructive = false }) => (
@@ -31,11 +37,36 @@ export default function SettingsScreen() {
         <Text style={styles.sectionHeader}>{title}</Text>
     );
 
+    const handleLogout = async () => {
+        try {
+            await logout(); // useAuth 훅의 로그아웃 함수 호출
+            router.replace('/login'); // 로그아웃 성공 후 로그인 화면으로 이동
+        } catch (error) {
+            console.error('Logout failed:', error);
+            // 필요하다면 여기서 사용자에게 오류 메시지를 표시할 수 있습니다.
+        }
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" />
             <ScrollView style={styles.container}>
                 <Text style={styles.headerTitle}>설정</Text>
+
+                <View style={{ flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' }}>
+                    {user ? (
+                        <View>
+                            <Text>이메일: {user.email}</Text>
+                            <Text>닉네임: {user.nickname}</Text>
+                            <Text>나이: {user.age}</Text>
+                            <Text>알람 시간: {user.alarm_time}</Text>
+                        </View>
+                    ) : (
+                        <View>
+                            <Text>로그인 정보가 없습니다.</Text>
+                        </View>
+                    )}
+                </View>
 
                 {/* --- User Info Card --- */}
                 <View style={styles.userCard}>
@@ -78,7 +109,7 @@ export default function SettingsScreen() {
 
                 <SectionHeader title="계정" />
                 <View style={styles.section}>
-                    <SettingItem icon="log-out" text="로그아웃" onPress={() => {}} />
+                    <SettingItem icon="log-out" text="로그아웃" onPress={handleLogout} />
                     <View style={styles.separator} />
                     <SettingItem icon="trash-2" text="계정 탈퇴" onPress={() => {}} isDestructive={true} />
                 </View>
