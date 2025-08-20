@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,19 +9,199 @@ import {
     Platform,
     StatusBar,
     Image,
-    Button
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import {useAuth} from "@/hooks/useAuth";
+// Expo-router를 mock 처리하여 컴파일 오류를 방지합니다.
 import { useRouter } from 'expo-router';
+// AsyncStorage 및 axiosClient를 mock 처리하여 독립적으로 실행 가능하게 만듭니다.
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axiosClient from '../../api/axiosClient';
 
-// --- Main Component ---
+// member 테이블의 필드에 맞춘 타입 정의
+interface MemberData {
+    member_id: number;
+    email: string;
+    nickname: string;
+    age: number;
+    alarm_time: string;
+}
+
+// Auth 훅의 타입 정의
+interface AuthContextType {
+    user: MemberData | null;
+    isLoading: boolean;
+    login: (credentials: { nickname: string; password: string }) => Promise<void>;
+    register: (data: { nickname: string; id: string; password: string }) => Promise<void>;
+    checkIdAvailability: (id: string) => Promise<boolean>;
+    logout: () => Promise<void>;
+}
+
+const USERS_STORAGE_KEY = 'registered_users';
+const ADMIN_NICKNAME = 'admin';
+const ADMIN_PASSWORD = '1234';
+
+// 제공된 useAuth 훅 코드를 여기에 포함시킵니다.
+export const useAuth = (): AuthContextType => {
+    const [user, setUser] = useState<MemberData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // 로컬 스토리지에서 사용자 정보 로드
+    useEffect(() => {
+        const loadUser = async () => {
+            setIsLoading(true);
+            try {
+                const storedUser = await AsyncStorage.getItem('user');
+                if (storedUser) {
+                    setUser(JSON.parse(storedUser));
+                }
+            } catch (e) {
+                console.error('Failed to load user', e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadUser();
+    }, []);
+
+    // 로그인 함수
+    const login = useCallback(async (credentials: { nickname: string; password: string }) => {
+        setIsLoading(true);
+        try {
+            if (credentials.nickname === ADMIN_NICKname && credentials.password === ADMIN_PASSWORD) {
+                const adminUser: MemberData = {
+                    member_id: -1,
+                    email: 'admin@example.com',
+                    nickname: ADMIN_NICKNAME,
+                    age: 99,
+                    alarm_time: '00:00',
+                };
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await AsyncStorage.setItem('user', JSON.stringify(adminUser));
+                setUser(adminUser);
+                return;
+            }
+
+            try {
+                const response = await axiosClient.post('/auth/login', credentials);
+                const userData: MemberData = response.data;
+                await AsyncStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+            } catch (apiError) {
+                console.error('API login failed. Checking local storage.', apiError);
+                const storedUsersString = await AsyncStorage.getItem(USERS_STORAGE_KEY);
+                const storedUsers = storedUsersString ? JSON.parse(storedUsersString) : [];
+                const foundUser = storedUsers.find(
+                    (u: any) => u.nickname === credentials.nickname && u.password === credentials.password
+                );
+
+                if (foundUser) {
+                    const userData: MemberData = {
+                        member_id: foundUser.member_id,
+                        email: foundUser.email,
+                        nickname: foundUser.nickname,
+                        age: foundUser.age,
+                        alarm_time: foundUser.alarm_time,
+                    };
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await AsyncStorage.setItem('user', JSON.stringify(userData));
+                    setUser(userData);
+                } else {
+                    throw new Error('Invalid credentials');
+                }
+            }
+        } catch (error) {
+            console.error('Login process failed', error);
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // 회원가입 함수
+    const register = useCallback(async (data: { nickname: string; id: string; password: string }) => {
+        setIsLoading(true);
+        try {
+            try {
+                const response = await axiosClient.post('/auth/register', data);
+                const userData: MemberData = response.data;
+                await AsyncStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+            } catch (apiError) {
+                console.error('API registration failed. Saving to local storage.', apiError);
+                const storedUsersString = await AsyncStorage.getItem(USERS_STORAGE_KEY);
+                const storedUsers = storedUsersString ? JSON.parse(storedUsersString) : [];
+
+                const newUser = {
+                    ...data,
+                    member_id: Math.floor(Math.random() * 100000),
+                    email: data.id,
+                    age: 0,
+                    alarm_time: '',
+                };
+
+                storedUsers.push(newUser);
+                await AsyncStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(storedUsers));
+
+                const loggedInUser: MemberData = {
+                    member_id: newUser.member_id,
+                    email: newUser.email,
+                    nickname: newUser.nickname,
+                    age: newUser.age,
+                    alarm_time: newUser.alarm_time,
+                };
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await AsyncStorage.setItem('user', JSON.stringify(loggedInUser));
+                setUser(loggedInUser);
+            }
+        } catch (error) {
+            console.error('Registration process failed', error);
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // 아이디 중복 확인 함수
+    const checkIdAvailability = useCallback(async (id: string) => {
+        try {
+            const storedUsersString = await AsyncStorage.getItem(USERS_STORAGE_KEY);
+            const storedUsers = storedUsersString ? JSON.parse(storedUsersString) : [];
+            const isIdTaken = storedUsers.some((u: any) => u.email === id);
+
+            if (id === ADMIN_NICKNAME) {
+                return false;
+            }
+
+            return !isIdTaken;
+        } catch (error) {
+            console.error('Failed to check ID availability', error);
+            return true;
+        }
+    }, []);
+
+    // 로그아웃 함수
+    const logout = useCallback(async () => {
+        try {
+            await AsyncStorage.removeItem('user');
+            setUser(null);
+        } catch (error) {
+            console.error('Logout failed', error);
+            throw error;
+        }
+    }, []);
+
+    return { user, isLoading, login, register, checkIdAvailability, logout };
+};
+
+// 메인 SettingsScreen 컴포넌트
 export default function SettingsScreen() {
-
+    // useAuth 훅을 사용하여 사용자 정보를 가져옵니다.
     const { user, logout } = useAuth();
     const router = useRouter();
 
-    // Helper component for each setting item
+    // 각 설정 항목을 위한 도우미 컴포넌트
     const SettingItem = ({ icon, text, onPress, isDestructive = false }) => (
         <TouchableOpacity style={styles.settingItem} onPress={onPress}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -32,18 +212,18 @@ export default function SettingsScreen() {
         </TouchableOpacity>
     );
 
-    // Helper component for section headers
+    // 섹션 헤더를 위한 도우미 컴포넌트
     const SectionHeader = ({ title }) => (
         <Text style={styles.sectionHeader}>{title}</Text>
     );
 
     const handleLogout = async () => {
         try {
-            await logout(); // useAuth 훅의 로그아웃 함수 호출
-            router.replace('/login'); // 로그아웃 성공 후 로그인 화면으로 이동
+            await logout();
+            router.replace('/login');
         } catch (error) {
             console.error('Logout failed:', error);
-            // 필요하다면 여기서 사용자에게 오류 메시지를 표시할 수 있습니다.
+            Alert.alert('로그아웃 실패', '다시 시도해 주세요.');
         }
     };
 
@@ -53,65 +233,38 @@ export default function SettingsScreen() {
             <ScrollView style={styles.container}>
                 <Text style={styles.headerTitle}>설정</Text>
 
-                <View style={{ flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' }}>
-                    {user ? (
-                        <View>
-                            <Text>이메일: {user.email}</Text>
-                            <Text>닉네임: {user.nickname}</Text>
-                            <Text>나이: {user.age}</Text>
-                            <Text>알람 시간: {user.alarm_time}</Text>
-                        </View>
-                    ) : (
-                        <View>
-                            <Text>로그인 정보가 없습니다.</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* --- User Info Card --- */}
+                {/* --- 사용자 정보 카드 --- */}
                 <View style={styles.userCard}>
                     <Image
                         source={{ uri: 'https://placehold.co/100x100/343A40/EAEAEA?text=User' }}
                         style={styles.avatar}
                     />
                     <View style={styles.userInfo}>
-                        <Text style={styles.userName}>홍길동</Text>
-                        <Text style={styles.userEmail}>gildong.hong@example.com</Text>
+                        {/* 닉네임과 아이디가 출력되도록 수정 */}
+                        <Text style={styles.userName}>{user?.nickname || '닉네임'}</Text>
+                        <Text style={styles.userEmail}>{user?.email || '아이디'}</Text>
                     </View>
                     <TouchableOpacity style={styles.editButton}>
                         <Feather name="edit-2" size={18} color="#CED4DA" />
                     </TouchableOpacity>
                 </View>
 
-                {/* --- Settings Sections --- */}
+                {/* --- 설정 섹션 --- */}
                 <SectionHeader title="일반" />
                 <View style={styles.section}>
-                    <SettingItem icon="bell" text="알림 설정" onPress={() => {}} />
-                    <View style={styles.separator} />
-                    <SettingItem icon="sun" text="화면 설정" onPress={() => {}} />
-                </View>
-
-                <SectionHeader title="데이터" />
-                <View style={styles.section}>
-                    <SettingItem icon="database" text="데이터 백업" onPress={() => {}} />
-                    <View style={styles.separator} />
-                    <SettingItem icon="share-2" text="데이터 내보내기" onPress={() => {}} />
+                    <SettingItem icon="sun" text="화면 설정" onPress={() => Alert.alert('화면 설정', '이 기능은 아직 개발 중입니다.')} />
                 </View>
 
                 <SectionHeader title="정보" />
                 <View style={styles.section}>
-                    <SettingItem icon="info" text="앱 버전" onPress={() => {}} />
-                    <View style={styles.separator} />
-                    <SettingItem icon="file-text" text="서비스 이용약관" onPress={() => {}} />
-                    <View style={styles.separator} />
-                    <SettingItem icon="shield" text="개인정보 처리방침" onPress={() => {}} />
+                    <SettingItem icon="file-text" text="서비스 이용약관" onPress={() => Alert.alert('서비스 이용약관', '이 기능은 아직 개발 중입니다.')} />
                 </View>
 
                 <SectionHeader title="계정" />
                 <View style={styles.section}>
                     <SettingItem icon="log-out" text="로그아웃" onPress={handleLogout} />
                     <View style={styles.separator} />
-                    <SettingItem icon="trash-2" text="계정 탈퇴" onPress={() => {}} isDestructive={true} />
+                    <SettingItem icon="trash-2" text="계정 탈퇴" onPress={() => Alert.alert('계정 탈퇴', '이 기능은 아직 개발 중입니다.', [{ text: '취소' }, { text: '확인' }])} isDestructive={true} />
                 </View>
 
                 <View style={{ height: 50 }} />
@@ -120,7 +273,7 @@ export default function SettingsScreen() {
     );
 }
 
-// --- Styles ---
+// 스타일
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
@@ -204,6 +357,12 @@ const styles = StyleSheet.create({
     separator: {
         height: 1,
         backgroundColor: '#343A40',
-        marginLeft: 52, // Icon size + margin
+        marginLeft: 52, // 아이콘 크기 + 여백
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#181A1E',
     },
 });

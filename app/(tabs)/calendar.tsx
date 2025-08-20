@@ -36,7 +36,7 @@ type GestureContext = { startY: number };
 // --- Constants & Helpers ---
 const { height } = Dimensions.get('window');
 const PANEL_HEADER_HEIGHT = 80;
-const MAX_PANEL_HEIGHT = height * 0.7; // 패널 높이 약간 증가
+const MAX_PANEL_HEIGHT = height * 0.5; // 패널 높이 약간 증가
 const MIN_PANEL_HEIGHT = PANEL_HEADER_HEIGHT + 40;
 const SNAP_TOP = -(MAX_PANEL_HEIGHT - MIN_PANEL_HEIGHT);
 const SNAP_BOTTOM = 0;
@@ -133,41 +133,44 @@ export default function Calendar() {
         const calendarDays: (number | null)[] = Array(firstDayOfMonth).fill(null);
         for (let i = 1; i <= daysInMonth; i++) { calendarDays.push(i); }
 
+        // ✅ 캘린더를 가운데 정렬하는 새로운 뷰 추가
         return (
-            <View style={styles.calendarGrid}>
-                {['일', '월', '화', '수', '목', '금', '토'].map((day) => <Text key={day} style={styles.dayOfWeekText}>{day}</Text>)}
-                {calendarDays.map((day, index) => {
-                    if (!day) return <View key={index} style={styles.dayCellContainer} />;
+            <View style={styles.calendarGridContainer}>
+                <View style={styles.calendarGrid}>
+                    {['일', '월', '화', '수', '목', '금', '토'].map((day) => <Text key={day} style={styles.dayOfWeekText}>{day}</Text>)}
+                    {calendarDays.map((day, index) => {
+                        if (!day) return <View key={index} style={styles.dayCellContainer} />;
 
-                    const date = new Date(year, month, day);
-                    const dateKey = getISODateString(date);
-                    const isToday = dateKey === getISODateString(today);
-                    const isSelected = selectedDate ? dateKey === getISODateString(selectedDate) : false;
-                    const hasEvent = events[dateKey] && events[dateKey].length > 0;
-                    const hasAnswer = !!dailyAnswers[dateKey];
+                        const date = new Date(year, month, day);
+                        const dateKey = getISODateString(date);
+                        const isToday = dateKey === getISODateString(today);
+                        const isSelected = selectedDate ? dateKey === getISODateString(selectedDate) : false;
+                        const hasEvent = events[dateKey] && events[dateKey].length > 0;
+                        const hasAnswer = !!dailyAnswers[dateKey];
 
-                    return (
-                        <View key={index} style={styles.dayCellContainer}>
-                            <MotiView whileTap={{ scale: 0.85 }}>
-                                <TouchableOpacity onPress={() => handleDatePress(day)}>
-                                    <View style={[styles.dayCell, isToday && !isSelected && styles.todayCell]}>
-                                        {isSelected ? (
-                                            <LinearGradient colors={['#FF8A65', '#FF7043']} style={styles.selectedDayCell}>
-                                                <Text style={[styles.dayText, styles.selectedDayText]}>{day}</Text>
-                                            </LinearGradient>
-                                        ) : (
-                                            <Text style={[styles.dayText, isToday && styles.todayText]}>{day}</Text>
-                                        )}
-                                        <View style={styles.dotContainer}>
-                                            {hasEvent && <MotiView style={styles.eventDot} from={{ scale: 0 }} animate={{ scale: 1 }} />}
-                                            {hasAnswer && <MotiView style={styles.answerDot} from={{ scale: 0 }} animate={{ scale: 1 }} />}
+                        return (
+                            <View key={index} style={styles.dayCellContainer}>
+                                <MotiView whileTap={{ scale: 0.85 }}>
+                                    <TouchableOpacity onPress={() => handleDatePress(day)}>
+                                        <View style={[styles.dayCell, isToday && !isSelected && styles.todayCell]}>
+                                            {isSelected ? (
+                                                <LinearGradient colors={['#FF8A65', '#FF7043']} style={styles.selectedDayCell}>
+                                                    <Text style={[styles.dayText, styles.selectedDayText]}>{day}</Text>
+                                                </LinearGradient>
+                                            ) : (
+                                                <Text style={[styles.dayText, isToday && styles.todayText]}>{day}</Text>
+                                            )}
+                                            <View style={styles.dotContainer}>
+                                                {hasEvent && <MotiView style={styles.eventDot} from={{ scale: 0 }} animate={{ scale: 1 }} />}
+                                                {hasAnswer && <MotiView style={styles.answerDot} from={{ scale: 0 }} animate={{ scale: 1 }} />}
+                                            </View>
                                         </View>
-                                    </View>
-                                </TouchableOpacity>
-                            </MotiView>
-                        </View>
-                    )
-                })}
+                                    </TouchableOpacity>
+                                </MotiView>
+                            </View>
+                        )
+                    })}
+                </View>
             </View>
         );
     };
@@ -198,7 +201,6 @@ export default function Calendar() {
                             <TouchableOpacity onPress={handleOpenModalForNew} disabled={!selectedDate}><Feather name="plus-circle" size={24} color={selectedDate ? "#A178DF" : "#495057"} /></TouchableOpacity>
                         </View>
                         <Animated.ScrollView style={[styles.eventList, contentOpacityStyle]}>
-                            {/* ✅ 일일 질문 및 답변을 렌더링 */}
                             {selectedDayAnswer && (
                                 <View style={styles.answerContainer}>
                                     <View style={styles.answerHeader}>
@@ -267,9 +269,14 @@ const styles = StyleSheet.create({
     calendarContainer: { paddingHorizontal: 20, marginTop: 20 },
     monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
     monthText: { fontSize: 28, fontWeight: 'bold', color: '#F8F9FA' },
-    calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-    dayOfWeekText: { width: `${100 / 7}%`, textAlign: 'center', marginBottom: 15, fontSize: 14, color: '#868E96' },
-    dayCellContainer: { width: `${100 / 7}%`, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    // ✅ 캘린더 전체를 가운데 정렬하는 뷰 추가
+    calendarGridContainer: { alignItems: 'center' },
+    // ✅ 캘린더 그리드의 width를 제거하고, 셀의 width를 고정 크기로 변경
+    calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', width: 300 },
+    // ✅ 요일 텍스트도 고정 너비로 변경
+    dayOfWeekText: { width: 40, textAlign: 'center', marginBottom: 15, fontSize: 14, color: '#868E96' },
+    // ✅ 날짜 셀 컨테이너도 고정 너비로 변경
+    dayCellContainer: { width: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
     dayCell: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20 },
     todayCell: { backgroundColor: '#212529', borderRadius: 20 },
     todayText: { fontWeight: 'bold', color: '#F8F9FA' },

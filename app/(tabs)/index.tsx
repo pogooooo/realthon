@@ -146,9 +146,35 @@ export default function TimeScreen() {
 
                 <Text style={styles.encouragingText}>{encouragingMessage}</Text>
 
+                {focusedNode ? (
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <Feather name="target" size={20} color="#FFD700" />
+                            <Text style={styles.cardTitle}>현재 활성화된 노트</Text>
+                        </View>
+                        <Text style={styles.focusedNodeTitle}>{focusedNode.title}</Text>
+                        <Text style={styles.focusedNodeDescription}>{focusedNode.description}</Text>
+                        <TouchableOpacity style={styles.goToButton} onPress={() => router.push('/(tabs)/map')}>
+                            <Text style={styles.goToButtonText}>지도로 이동하기</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <Feather name="compass" size={20} color="#A19ECA" />
+                            <Text style={styles.cardTitle}>포커스 노트 선택하기</Text>
+                        </View>
+                        <Text style={styles.focusedNodeDescription}>
+                            현재 활성화된 노트가 없습니다. {'\n'}지도에서 집중할 목표를 선택해주세요.
+                        </Text>
+                        <TouchableOpacity style={styles.goToButton} onPress={() => router.push('/(tabs)/map')}>
+                            <Text style={styles.goToButtonText}>지도로 이동하기</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <Feather name="help-circle" size={20} color="#A19ECA" />
                         <Text style={styles.cardTitle}>오늘의 기록</Text>
                     </View>
 
@@ -215,33 +241,6 @@ export default function TimeScreen() {
                         />
                     </View>
                 </View>
-
-                {focusedNode ? (
-                    <View style={styles.card}>
-                        <View style={styles.cardHeader}>
-                            <Feather name="target" size={20} color="#FFD700" />
-                            <Text style={styles.cardTitle}>현재 활성화된 노트</Text>
-                        </View>
-                        <Text style={styles.focusedNodeTitle}>{focusedNode.title}</Text>
-                        <Text style={styles.focusedNodeDescription}>{focusedNode.description}</Text>
-                        <TouchableOpacity style={styles.goToButton} onPress={() => router.push('/(tabs)/map')}>
-                            <Text style={styles.goToButtonText}>지도로 이동하기</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    <View style={styles.card}>
-                        <View style={styles.cardHeader}>
-                            <Feather name="compass" size={20} color="#A19ECA" />
-                            <Text style={styles.cardTitle}>포커스 노트 선택하기</Text>
-                        </View>
-                        <Text style={styles.focusedNodeDescription}>
-                            현재 활성화된 노트가 없습니다. {'\n'}지도에서 집중할 목표를 선택해주세요.
-                        </Text>
-                        <TouchableOpacity style={styles.goToButton} onPress={() => router.push('/(tabs)/map')}>
-                            <Text style={styles.goToButtonText}>지도로 이동하기</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
 
                 {showTimePicker && (
                     <DateTimePicker

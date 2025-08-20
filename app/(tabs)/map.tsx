@@ -19,7 +19,7 @@ import { useTechTree, Tech, NODE_STATUS } from '../../hooks/useTechTree'; // 타
 // --- Constants ---
 const { height, width } = Dimensions.get('window');
 const PANEL_HEADER_HEIGHT = 60;
-const MAX_PANEL_HEIGHT = height * 0.6;
+const MAX_PANEL_HEIGHT = height * 0.5;
 const MIN_PANEL_HEIGHT = PANEL_HEADER_HEIGHT + 40;
 const SNAP_TOP = -(MAX_PANEL_HEIGHT - MIN_PANEL_HEIGHT);
 const SNAP_BOTTOM = 0;

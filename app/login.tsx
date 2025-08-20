@@ -1,24 +1,48 @@
-// app/login.tsx
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, Image, Alert, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
-import {Redirect, useRouter} from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../hooks/useAuth';
 
 export default function LoginScreen() {
-    const [email, setEmail] = useState('');
+    // ✅ 이메일 대신 아이디(닉네임)를 저장하는 상태로 변경
+    const [nickname, setNickname] = useState('');
     const [password, setPassword] = useState('');
-    const { login, isLoading } = useAuth();
+
+    // useAuth 훅에서 user와 isLoading 상태를 가져옵니다.
+    const { login, isLoading, user } = useAuth();
     const router = useRouter();
 
-    const handleLogin = async () => {
-        try {
-            await login({ email, password });
+    // ⛔️ IMPORTANT: `useAuth` 훅이 이미 로그인된 사용자를 감지하면, 즉시 리디렉션합니다.
+    useEffect(() => {
+        if (user && !isLoading) {
             router.replace('/(tabs)');
+        }
+    }, [user, isLoading, router]);
+
+    const handleLogin = async () => {
+        // ✅ 아이디와 비밀번호 입력 필드가 비어있는지 확인
+        if (!nickname.trim() || !password.trim()) {
+            Alert.alert('로그인 실패', '아이디와 비밀번호를 모두 입력해주세요.');
+            return;
+        }
+
+        try {
+            // ✅ login 함수에 아이디(nickname)와 비밀번호를 전달합니다.
+            await login({ nickname, password });
+            // 로그인 성공 후 리디렉션은 useEffect에서 처리됩니다.
         } catch (e) {
-            Alert.alert('로그인 실패', '이메일 또는 비밀번호가 올바르지 않습니다.');
+            Alert.alert('로그인 실패', '아이디 또는 비밀번호가 올바르지 않습니다.');
         }
     };
+
+    // 로딩 중일 때 로딩 화면을 표시합니다.
+    if (isLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#A19ECA" />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -36,12 +60,13 @@ export default function LoginScreen() {
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="이메일"
+                        // ✅ 이메일 대신 아이디를 입력받도록 placeholder를 변경합니다.
+                        placeholder="아이디"
                         placeholderTextColor="#868E96"
-                        keyboardType="email-address"
+                        keyboardType="default" // 이메일 키보드 타입 대신 기본 타입으로 변경
                         autoCapitalize="none"
-                        value={email}
-                        onChangeText={setEmail}
+                        value={nickname} // 상태를 email에서 nickname으로 변경
+                        onChangeText={setNickname}
                     />
                     <TextInput
                         style={styles.input}
@@ -57,13 +82,8 @@ export default function LoginScreen() {
                 <View style={styles.buttonContainer}>
                     <TouchableOpacity
                         style={styles.loginButton}
-                        onPress={handleLogin}
-                        disabled={isLoading}>
-                        {isLoading ? (
-                            <ActivityIndicator color="#F8F9FA" />
-                        ) : (
-                            <Text style={styles.loginButtonText}>로그인</Text>
-                        )}
+                        onPress={handleLogin}>
+                        <Text style={styles.loginButtonText}>로그인</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.registerButton}
@@ -134,5 +154,11 @@ const styles = StyleSheet.create({
         color: '#A19ECA',
         fontSize: 16,
         textDecorationLine: 'underline',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#181A1E',
     },
 });
